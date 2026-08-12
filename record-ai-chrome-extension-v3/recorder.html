@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RECORD-AI — Gravador v3.0</title>
+  <link rel="stylesheet" href="recorder.css">
+</head>
+<body>
+  <div class="app">
+    <div class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">🎙️</div>
+        <div class="brand-name">RECORD-AI</div>
+        <div class="brand-tag">Voice → API → Telegram</div>
+      </div>
+
+      <div class="info-box">
+        <div class="info-title">🔒 Segurança</div>
+        <div class="info-text">
+          Seu <strong>Bot Token</strong> e <strong>Chat ID</strong> ficam no servidor.
+          A extensão só envia áudio para sua API.
+        </div>
+      </div>
+
+      <div class="info-box">
+        <div class="info-title">Como funciona</div>
+        <ol class="info-list">
+          <li>Escolha <strong>Microfone</strong> ou <strong>Aba do sistema</strong></li>
+          <li>Clique em <strong>Gravar</strong></li>
+          <li>Fale ou deixe a reunião tocar</li>
+          <li>Clique em <strong>Parar</strong></li>
+          <li>Áudio é transcrito pela <strong>API</strong></li>
+          <li>Texto vai pro <strong>Telegram</strong></li>
+        </ol>
+      </div>
+
+      <div class="info-box">
+        <div class="info-title">Configuração da API</div>
+        <div class="config-item">
+          <span class="config-label">URL:</span>
+          <span class="config-value" id="display-api-url">—</span>
+        </div>
+        <div class="config-status" id="config-status">⏳ Carregando...</div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="top-bar">
+        <div class="page-title">Gravador de Voz</div>
+        <button id="close-btn" class="icon-btn" title="Fechar">✕</button>
+      </div>
+
+      <div class="recorder-area">
+        <!-- Estado: Inicial — escolha da fonte de áudio -->
+        <div id="state-permission" class="state">
+          <div class="state-icon">🎙️</div>
+          <div class="state-title">Gravador RECORD-AI</div>
+          <div class="state-desc">Escolha a fonte de áudio que deseja transcrever.</div>
+          <div class="btn-group">
+            <button id="btn-record-mic" class="btn btn-record">🎤 Gravar Microfone</button>
+            <button id="btn-record-tab" class="btn btn-record-tab">🖥️ Gravar Aba do Sistema</button>
+          </div>
+          <div class="state-hint">Use “Aba do Sistema” para reuniões no Meet/Zoom/Teams.</div>
+        </div>
+
+        <!-- Estado: Gravando -->
+        <div id="state-recording" class="state hidden">
+          <div class="recording-indicator">
+            <div class="rec-dot"></div>
+            <div class="rec-text">GRAVANDO</div>
+          </div>
+          <div class="timer" id="rec-timer">00:00</div>
+          <div class="visualizer">
+            <canvas id="viz" width="500" height="80"></canvas>
+          </div>
+          <button id="btn-stop" class="btn btn-stop">⏹️ Parar Gravação</button>
+        </div>
+
+        <!-- Estado: Revisar antes de enviar -->
+        <div id="state-review" class="state hidden">
+          <div class="state-icon">🎧</div>
+          <div class="state-title">Pronto para enviar?</div>
+          <div class="state-desc">Revise a gravação antes de enviar para transcrição.</div>
+          <div class="btn-group">
+            <button id="btn-send" class="btn btn-primary">📤 Enviar</button>
+            <button id="btn-cancel" class="btn btn-stop">❌ Cancelar</button>
+          </div>
+        </div>
+
+        <!-- Estado: Enviando -->
+        <div id="state-sending" class="state hidden">
+          <div class="state-icon">📤</div>
+          <div class="state-title">Enviando para sua API...</div>
+          <div class="progress-wrap">
+            <div class="progress-track">
+              <div class="progress-fill" id="send-progress"></div>
+            </div>
+            <div class="progress-text" id="send-text">Preparando...</div>
+          </div>
+        </div>
+
+        <!-- Estado: Sucesso -->
+        <div id="state-success" class="state hidden">
+          <div class="state-icon success">✅</div>
+          <div class="state-title success">Transcrição enviada!</div>
+          <div class="state-desc">Sua API transcreveu o áudio e enviou o texto pro Telegram.</div>
+          <button id="btn-new" class="btn btn-primary">🎙️ Nova Gravação</button>
+        </div>
+
+        <!-- Estado: Erro -->
+        <div id="state-error" class="state hidden">
+          <div class="state-icon error">❌</div>
+          <div class="state-title error">Erro no envio</div>
+          <div class="state-desc" id="error-msg">Tente novamente.</div>
+          <button id="btn-retry" class="btn btn-primary">🔄 Tentar Novamente</button>
+        </div>
+      </div>
+
+      <div class="footer">
+        <span>RECORD-AI Voice Recorder v3.0</span>
+        <span>•</span>
+        <span>API Proxy Seguro</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="recorder.js"></script>
+</body>
+</html>

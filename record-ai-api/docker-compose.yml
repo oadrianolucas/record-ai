@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  RECORD-AI-api:
+    build: .
+    container_name: RECORD-AI-api
+    ports:
+      - "80:80"
+    # env_file garante que TELEGRAM_CHAT_ID_1, _2... cheguem ao container
+    # sem precisar editar este arquivo a cada conversa adicional
+    env_file:
+      - .env
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - RECORD-AI_API_KEY=${RECORD-AI_API_KEY}
+      - ENABLE_TRANSCRIPTION=${ENABLE_TRANSCRIPTION:-false}
+      - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-small}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
+      - HF_TOKEN=${HF_TOKEN}
+    volumes:
+      - ./models:/root/.cache/huggingface # cache dos modelos Whisper
+    restart: unless-stopped

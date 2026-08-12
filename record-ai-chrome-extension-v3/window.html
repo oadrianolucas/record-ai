@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="window.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Estado: Escolher fonte -->
+    <div id="state-source" class="state">
+      <div class="state-title">Gravar</div>
+      <div class="btn-group">
+        <button id="btn-mic" class="btn btn-record">🎤 Microfone</button>
+        <button id="btn-tab" class="btn btn-record-tab">🖥️ Reunião</button>
+      </div>
+    </div>
+
+    <!-- Estado: Selecionando janela/aba (picker do Chrome) -->
+    <div id="state-selecting" class="state hidden">
+      <div class="state-icon">🖥️</div>
+      <div class="state-title">Selecione a janela ou aba</div>
+      <div class="state-desc">No seletor do Chrome, marque <strong>"Compartilhar áudio"</strong> e clique em <strong>Compartilhar</strong>.</div>
+    </div>
+
+    <!-- Estado: Gravando compacto -->
+    <div id="state-recording" class="state hidden compact">
+      <button id="btn-pause" class="btn btn-pause" title="Parar">⏸</button>
+      <div class="timer" id="timer">00:00</div>
+    </div>
+
+    <!-- Estado: Enviando -->
+    <div id="state-sending" class="state hidden">
+      <div class="state-icon">📤</div>
+      <div class="state-title">Enviando...</div>
+      <div class="progress-wrap">
+        <div class="progress-track">
+          <div class="progress-fill" id="progress"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Estado: Sucesso -->
+    <div id="state-success" class="state hidden">
+      <div class="state-icon success">✅</div>
+      <div class="state-title success">Enviado!</div>
+      <div class="state-desc">Acompanhe o processamento no Telegram.</div>
+      <button id="btn-close" class="btn btn-primary">Fechar</button>
+    </div>
+
+    <!-- Estado: Erro -->
+    <div id="state-error" class="state hidden">
+      <div class="state-icon error">❌</div>
+      <div class="state-title error">Erro</div>
+      <div class="state-desc" id="error-msg"></div>
+      <button id="btn-retry" class="btn btn-primary">Tentar</button>
+    </div>
+  </div>
+
+  <script src="window.js"></script>
+</body>
+</html>

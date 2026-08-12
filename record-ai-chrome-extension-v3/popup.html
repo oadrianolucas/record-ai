@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div class="brand">
+        <span class="brand-icon">🎙️</span>
+        <span class="brand-name">RECORD-AI</span>
+      </div>
+    </div>
+
+    <!-- Painel principal -->
+    <div class="main-panel">
+      <div id="panel-launch" class="state">
+        <button id="btn-open-recorder" class="btn btn-record">🎙️ Abrir Gravador</button>
+        <div class="state-desc">Abre uma janela flutuante que fica gravando enquanto você usa outras abas.</div>
+      </div>
+    </div>
+
+    <!-- Painel de status -->
+    <div id="status-panel" class="panel hidden">
+      <div class="panel-title">Status</div>
+      <div class="status-detail" id="status-detail">Carregando...</div>
+      <button id="btn-refresh-status" class="btn btn-config">🔄 Atualizar</button>
+    </div>
+
+    <!-- Painel de configuração -->
+    <div id="config-panel" class="panel hidden">
+      <div class="panel-title">Configurar</div>
+      <label>URL da API</label>
+      <input type="text" id="api-url" placeholder="https://sua-api.com">
+      <label>API Key</label>
+      <input type="password" id="api-key" placeholder="opcional">
+      <label>HASH ID</label>
+      <input type="text" id="hash-id" placeholder="opcional — padrão: conversa principal do servidor">
+      <button id="save-config" class="btn btn-config">💾 Salvar</button>
+      <div id="config-msg" class="msg"></div>
+    </div>
+
+    <!-- Navegação inferior -->
+    <div class="nav">
+      <button id="nav-record" class="nav-btn active">🎙️</button>
+      <button id="nav-status" class="nav-btn">📊</button>
+      <button id="nav-config" class="nav-btn">⚙️</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

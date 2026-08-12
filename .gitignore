@@ -1,0 +1,27 @@
+# Segredos — NUNCA commitar
+.env
+*.env
+!.env.example
+
+# Modelos Whisper (cache local, baixados em runtime)
+models/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Docker
+docker-compose.override.yml
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
+*.swp
