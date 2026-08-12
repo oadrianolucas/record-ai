@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, Header, UploadFile, HTTPException
+from fastapi import FastAPI, File, Header, Request, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 import os
@@ -137,6 +137,41 @@ def status_telegram():
             if webhook_url and not info.get("last_error_message")
             else "Webhook NÃO registrado. Chame setWebhook apontando para /webhook/telegram."
         )
+    }
+
+
+@app.get("/sync-telegram")
+def sync_telegram(request: Request):
+    """Registra o webhook do Telegram apontando para esta mesma API (/webhook/telegram).
+    A URL pública é derivada da própria requisição (host + scheme), funcionando atrás de proxy reverso."""
+    if not TELEGRAM_BOT_TOKEN:
+        raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN não configurado")
+
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
+    if not host:
+        raise HTTPException(status_code=500, detail="Não foi possível determinar o host público")
+
+    webhook_url = f"{proto}://{host}/webhook/telegram"
+    payload = {"url": webhook_url, "drop_pending_updates": False}
+    if TELEGRAM_WEBHOOK_SECRET:
+        payload["secret_token"] = TELEGRAM_WEBHOOK_SECRET
+
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook"
+        resp = requests.post(url, json=payload, timeout=30)
+        result = resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Erro ao registrar webhook: {e}")
+
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result.get("description", "Erro Telegram"))
+
+    return {
+        "ok": True,
+        "webhook_url": webhook_url,
+        "telegram_response": result.get("description"),
+        "hint": "Webhook registrado. Verifique em /status-telegram."
     }
 
 
