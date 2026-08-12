@@ -106,6 +106,40 @@ def health():
     }
 
 
+@app.get("/status-telegram")
+def status_telegram():
+    """Consulta o getWebhookInfo do Telegram e resume o estado do webhook do bot."""
+    if not TELEGRAM_BOT_TOKEN:
+        raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN não configurado")
+
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getWebhookInfo"
+        resp = requests.get(url, timeout=30)
+        result = resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Erro ao consultar Telegram: {e}")
+
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result.get("description", "Erro Telegram"))
+
+    info = result.get("result", {})
+    webhook_url = info.get("url", "")
+    return {
+        "webhook_registered": bool(webhook_url),
+        "webhook_url": webhook_url,
+        "pending_update_count": info.get("pending_update_count", 0),
+        "last_error_message": info.get("last_error_message"),
+        "last_error_date": info.get("last_error_date"),
+        "webhook_secret_configured": bool(TELEGRAM_WEBHOOK_SECRET),
+        "conversations_configured": len(TELEGRAM_CONVERSATIONS),
+        "hint": (
+            "Webhook registrado e sem erro recente."
+            if webhook_url and not info.get("last_error_message")
+            else "Webhook NÃO registrado. Chame setWebhook apontando para /webhook/telegram."
+        )
+    }
+
+
 def _telegram_send_message(chat_id, text: str, parse_mode: str = "Markdown") -> dict:
     """Envia uma mensagem de texto para um chat do Telegram."""
     if not TELEGRAM_BOT_TOKEN:
