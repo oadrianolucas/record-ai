@@ -4,6 +4,7 @@ import requests
 import os
 import tempfile
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from faster_whisper import WhisperModel
 from typing import Optional
 from openai import OpenAI
@@ -22,6 +23,9 @@ app.add_middleware(
 
 # Configs via variáveis de ambiente (nunca no navegador!)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+# Fuso horário usado nos timestamps das reuniões
+BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
 
 
 def _load_telegram_conversations() -> list[dict]:
@@ -307,7 +311,7 @@ def _organize_with_deepseek(transcription: str, segments: list = None, meeting_d
     if not deepseek_client:
         raise RuntimeError("DeepSeek não configurado")
 
-    meeting_datetime = meeting_datetime or datetime.now().strftime("%d/%m/%Y às %H:%M")
+    meeting_datetime = meeting_datetime or datetime.now(BRASILIA_TZ).strftime("%d/%m/%Y às %H:%M")
 
     # Se a transcrição for curta, processa de uma vez
     if len(transcription) <= 6000:
@@ -591,7 +595,7 @@ def _create_notion_page(markdown_content: str, title: str) -> dict:
 def _process_meeting(file_path: str, filename: str, api_key: Optional[str] = None, chat_id: Optional[str] = None):
     """Processa a reunião em background: transcreve, organiza, cria no Notion e envia status no Telegram."""
     chat_id = chat_id or TELEGRAM_CHAT_ID
-    started_at = datetime.now()
+    started_at = datetime.now(BRASILIA_TZ)
     meeting_label = started_at.strftime("%d/%m/%Y às %H:%M")
 
     def send_status(text: str):
@@ -679,7 +683,7 @@ async def upload_and_transcribe(
         tmp_path = tmp.name
 
     # Notifica recebimento
-    now = datetime.now().strftime("%d/%m/%Y às %H:%M")
+    now = datetime.now(BRASILIA_TZ).strftime("%d/%m/%Y às %H:%M")
     _telegram_send_message(target_chat_id, f"🎙️ *RECORD-AI*\n\n📥 Áudio de *{now}* recebido. Iniciando processamento...")
 
     # Processa em background (sem await, para responder rápido à extensão)
