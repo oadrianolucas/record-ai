@@ -133,9 +133,11 @@ def status_telegram():
         "webhook_secret_configured": bool(TELEGRAM_WEBHOOK_SECRET),
         "conversations_configured": len(TELEGRAM_CONVERSATIONS),
         "hint": (
-            "Webhook registrado e sem erro recente."
-            if webhook_url and not info.get("last_error_message")
-            else "Webhook NÃO registrado. Chame setWebhook apontando para /webhook/telegram."
+            f"Webhook registrado, mas o Telegram recebeu erro: {info['last_error_message']}"
+            if webhook_url and info.get("last_error_message")
+            else "Webhook registrado e sem erro recente."
+            if webhook_url
+            else "Webhook NÃO registrado. Acesse /sync-telegram para registrar."
         )
     }
 
@@ -761,7 +763,7 @@ def _telegram_download_file(file_id: str) -> str:
 @app.post("/webhook/telegram")
 async def telegram_webhook(
     update: dict,
-    x_telegram_bot_api_secret_token: Optional[str] = None
+    x_telegram_bot_api_secret_token: Optional[str] = Header(None)
 ):
     """
     Webhook chamado pelo Telegram quando o bot recebe uma mensagem.
