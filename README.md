@@ -1,15 +1,10 @@
 # 🎙️ RECORD-AI
 
+> 🇧🇷 Português | [🇺🇸 English](README.en.md)
+
 Grave reuniões pelo navegador e receba a **ata pronta no Notion**, com acompanhamento em tempo real pelo Telegram — tudo **self-hosted**.
 
-```
-┌─────────────────┐     ┌──────────────────┐     ┌────────────┐
-│  Extensão Chrome │ ──▶ │  API FastAPI      │ ──▶ │  Whisper   │  transcrição local
-│  (grava o áudio) │     │  (sua máquina/    │     └────────────┘
-└─────────────────┘     │   VPS, Docker)    │ ──▶  DeepSeek     organiza a ata
-                        └──────────────────┘ ──▶  Notion       página com a ata
-                                                └─▶  Telegram     status do processamento
-```
+![Fluxo do RECORD-AI](fluxo_prbr.png)
 
 ## ✨ O que ele faz
 
