@@ -2,8 +2,11 @@ from fastapi import FastAPI, File, Header, Request, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 import os
+import math
+import subprocess
 import tempfile
 from datetime import datetime
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 from faster_whisper import WhisperModel
 from typing import Optional
@@ -213,15 +216,78 @@ def _resolve_chat_id(hash_id: Optional[str]) -> str:
     raise HTTPException(status_code=400, detail="hash_id não configurado no servidor")
 
 
+# Áudios mais longos que isso são divididos em pedaços antes do Whisper,
+# porque a decodificação/transcrição de arquivos longos (webm do MediaRecorder)
+# pode cortar o áudio no meio do caminho
+AUDIO_CHUNK_SECONDS = 600
+
+
+def _get_audio_duration_seconds(file_path: str) -> float:
+    """Retorna a duração do áudio em segundos via ffprobe."""
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file_path],
+        capture_output=True, text=True, timeout=60
+    )
+    return float(result.stdout.strip())
+
+
+def _extract_audio_chunk(file_path: str, start_seconds: float, duration_seconds: int) -> str:
+    """Extrai um trecho do áudio em WAV 16kHz mono (formato ideal para o Whisper)."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+        chunk_path = tmp.name
+    subprocess.run(
+        ["ffmpeg", "-y", "-ss", str(start_seconds), "-t", str(duration_seconds),
+         "-i", file_path, "-ar", "16000", "-ac", "1", "-f", "wav", chunk_path],
+        capture_output=True, timeout=300, check=True
+    )
+    return chunk_path
+
+
 def _transcribe_audio(file_path: str) -> tuple[str, list, str]:
-    """Transcreve o áudio com Whisper local. Retorna transcrição completa, segments e idioma."""
+    """Transcreve o áudio com Whisper local. Retorna transcrição completa, segments e idioma.
+    Áudios longos são divididos em pedaços de 10 minutos e transcritos separadamente,
+    com os timestamps de cada pedaço corrigidos para o tempo absoluto do áudio."""
     if not whisper_model:
         raise RuntimeError("Transcrição não habilitada")
 
-    segments_iter, info = whisper_model.transcribe(file_path, language="pt", beam_size=5)
-    segments = list(segments_iter)
-    transcription = " ".join([seg.text.strip() for seg in segments])
-    return transcription, segments, info.language
+    try:
+        duration = _get_audio_duration_seconds(file_path)
+    except Exception as e:
+        print(f"⚠️ ffprobe falhou ({e}); transcrevendo o arquivo inteiro.")
+        duration = 0
+
+    # Áudio curto: transcreve direto, como antes
+    if duration <= AUDIO_CHUNK_SECONDS:
+        segments_iter, info = whisper_model.transcribe(file_path, language="pt", beam_size=5)
+        segments = list(segments_iter)
+        transcription = " ".join([seg.text.strip() for seg in segments])
+        return transcription, segments, info.language
+
+    # Áudio longo: transcreve pedaço a pedaço e junta o resultado
+    all_segments = []
+    language = "pt"
+    total_chunks = math.ceil(duration / AUDIO_CHUNK_SECONDS)
+    print(f"🎬 Áudio de {duration / 60:.1f} min dividido em {total_chunks} pedaços de 10 min")
+
+    for index in range(total_chunks):
+        start = index * AUDIO_CHUNK_SECONDS
+        chunk_path = None
+        try:
+            chunk_path = _extract_audio_chunk(file_path, start, AUDIO_CHUNK_SECONDS)
+            segments_iter, info = whisper_model.transcribe(chunk_path, language="pt", beam_size=5)
+            language = info.language
+            for seg in segments_iter:
+                all_segments.append(SimpleNamespace(
+                    start=seg.start + start,
+                    end=seg.end + start,
+                    text=seg.text
+                ))
+        finally:
+            if chunk_path and os.path.exists(chunk_path):
+                os.remove(chunk_path)
+
+    transcription = " ".join([seg.text.strip() for seg in all_segments])
+    return transcription, all_segments, language
 
 
 def _split_transcription_into_chunks(segments: list, chunk_duration_seconds: int = 600) -> list[str]:
@@ -612,7 +678,8 @@ def _process_meeting(file_path: str, filename: str, api_key: Optional[str] = Non
             return
 
         # 2. Organizando com DeepSeek
-        send_status(f"🎙️ *RECORD-AI*\n\nReunião de *{meeting_label}*:\n🧠 Organizando com IA...")
+        coverage_minutes = (segments[-1].end if segments else 0) / 60
+        send_status(f"🎙️ *RECORD-AI*\n\nReunião de *{meeting_label}*:\n🧠 Organizando com IA ({coverage_minutes:.0f} min transcritos)...")
         organized = _organize_with_deepseek(transcription, segments, meeting_label)
 
         # 3. Criando no Notion
