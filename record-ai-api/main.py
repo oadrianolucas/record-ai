@@ -30,6 +30,9 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 # Fuso horário usado nos timestamps das reuniões
 BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
 
+# Limite de download da Bot API do Telegram (getFile rejeita arquivos maiores)
+TELEGRAM_MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
+
 
 def _load_telegram_conversations() -> list[dict]:
     """Carrega as conversas: TELEGRAM_CHAT_ID/HASH_ID (padrão) + pares numerados _1, _2, ..."""
@@ -868,6 +871,19 @@ async def telegram_webhook(
     if not whisper_model:
         _telegram_send_message(chat_id, "🤷 Transcrição nao habilitada no servidor.")
         return {"ok": True}
+
+    # A Bot API do Telegram só permite baixar arquivos de até 20 MB via getFile
+    file_size = audio.get("file_size", 0)
+    if file_size > TELEGRAM_MAX_DOWNLOAD_BYTES:
+        size_mb = file_size / (1024 * 1024)
+        limit_mb = TELEGRAM_MAX_DOWNLOAD_BYTES / (1024 * 1024)
+        _telegram_send_message(
+            chat_id,
+            f"⚠️ *RECORD-AI*\n\nEste áudio tem *{size_mb:.0f} MB*, acima do limite de *{limit_mb:.0f} MB* "
+            "que o Telegram permite bots baixarem.\n\n"
+            "Para reuniões longas, grave e envie pela *extensão Chrome* — ela não tem esse limite."
+        )
+        return {"ok": True, "message": "Arquivo acima do limite de download do Telegram"}
 
     file_id = audio["file_id"]
 
