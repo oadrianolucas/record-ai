@@ -27,12 +27,17 @@ const sendProgress = document.getElementById('send-progress');
 const sendText = document.getElementById('send-text');
 const errorMsg = document.getElementById('error-msg');
 const displayApiUrl = document.getElementById('display-api-url');
+const displayMode = document.getElementById('display-mode');
 const configStatus = document.getElementById('config-status');
 
 let config = {};
+const MODE_LABELS = {
+  meeting: '1️⃣ Reunião',
+  ideas: '2️⃣ Organizador de Ideias'
+};
 
 // Carrega config da extensão
-chrome.storage.local.get(['apiUrl', 'apiKey', 'hashId'], (data) => {
+chrome.storage.local.get(['apiUrl', 'apiKey', 'hashId', 'mode'], (data) => {
   config = data;
   if (data.apiUrl) {
     displayApiUrl.textContent = data.apiUrl;
@@ -43,6 +48,8 @@ chrome.storage.local.get(['apiUrl', 'apiKey', 'hashId'], (data) => {
     configStatus.textContent = '⚠️ Configure a API no popup';
     configStatus.style.color = '#ffaa00';
   }
+  config.mode = data.mode || 'meeting';
+  displayMode.textContent = MODE_LABELS[config.mode] || MODE_LABELS.meeting;
 });
 
 function showState(name) {
@@ -220,6 +227,7 @@ async function sendToApi(audioBlob) {
   if (config.hashId) {
     headers['X-Hash-Id'] = config.hashId;
   }
+  headers['X-Mode'] = config.mode || 'meeting';
 
   sendProgress.style.width = '50%';
   sendText.textContent = 'Transcrevendo e enviando...';

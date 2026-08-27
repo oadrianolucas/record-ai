@@ -12,6 +12,7 @@ from faster_whisper import WhisperModel
 from typing import Optional
 from openai import OpenAI
 import traceback
+import threading
 
 app = FastAPI(title="RECORD-AI API", version="3.0.0")
 
@@ -224,6 +225,37 @@ def _resolve_chat_id(hash_id: Optional[str]) -> str:
 # pode cortar o áudio no meio do caminho
 AUDIO_CHUNK_SECONDS = 600
 
+# Modos de processamento
+MODE_MEETING = "meeting"
+MODE_IDEAS = "ideas"
+VALID_MODES = {MODE_MEETING, MODE_IDEAS}
+DEFAULT_MODE = MODE_MEETING
+
+# Modo por conversa do Telegram (em memória; reinicia com o servidor)
+_chat_modes = {}
+_chat_modes_lock = threading.Lock()
+
+
+def _get_chat_mode(chat_id: str) -> str:
+    with _chat_modes_lock:
+        return _chat_modes.get(str(chat_id), DEFAULT_MODE)
+
+
+def _set_chat_mode(chat_id: str, mode: str) -> None:
+    if mode not in VALID_MODES:
+        return
+    with _chat_modes_lock:
+        _chat_modes[str(chat_id)] = mode
+
+
+def _resolve_mode(x_mode: Optional[str], chat_id: Optional[str] = None) -> str:
+    mode = (x_mode or "").strip().lower()
+    if mode in VALID_MODES:
+        return mode
+    if chat_id:
+        return _get_chat_mode(chat_id)
+    return DEFAULT_MODE
+
 
 def _get_audio_duration_seconds(file_path: str) -> float:
     """Retorna a duração do áudio em segundos via ffprobe."""
@@ -417,6 +449,124 @@ def _organize_with_deepseek(transcription: str, segments: list = None, meeting_d
         summaries.append(summary)
 
     return _consolidate_summaries_with_deepseek(summaries, transcription, meeting_datetime)
+
+
+def _organize_ideas_with_deepseek(transcription: str, segments: list = None, created_at: str = "") -> str:
+    """Organiza uma transcrição de brainstorm/roteiro/ideias pessoais com DeepSeek."""
+    if not deepseek_client:
+        raise RuntimeError("DeepSeek não configurado")
+
+    created_at = created_at or datetime.now(BRASILIA_TZ).strftime("%d/%m/%Y às %H:%M")
+
+    if len(transcription) <= 6000:
+        system_prompt = (
+            "Você é um assistente especialista em organizar ideias, roteiros e pensamentos. "
+            "Receba a transcrição bruta de um momento de reflexão pessoal (eu comigo mesmo) "
+            "e transforme-a em um documento Markdown claro e bem estruturado. "
+            "Inclua: título criativo, resumo executivo, temas principais, ideias organizadas, "
+            "conexões entre ideias, próximos passos sugeridos e notas importantes. "
+            "Não invente informações. Use linguagem clara e objetiva em português. "
+            f"O registro foi feito em {created_at}. Use esta data/hora exata no documento."
+        )
+
+        response = deepseek_client.chat.completions.create(
+            model="deepseek-v4-pro",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Transcrição bruta:\n\n{transcription}"}
+            ],
+            stream=False,
+            reasoning_effort="high",
+            extra_body={"thinking": {"type": "enabled"}}
+        )
+        return response.choices[0].message.content
+
+    # Transcrição longa: divide em chunks de 10 minutos
+    if not segments:
+        segments = []
+
+    chunks = _split_transcription_into_chunks(segments, chunk_duration_seconds=600)
+    summaries = []
+
+    for i, chunk in enumerate(chunks):
+        system_prompt = (
+            "Você é um assistente especialista em organizar ideias, roteiros e pensamentos. "
+            "Resuma o trecho fornecido de forma estruturada em Markdown. "
+            "Inclua apenas: temas principais, ideias organizadas, conexões entre ideias, "
+            "próximos passos sugeridos e notas importantes. Não invente informações. Use português. "
+            f"O registro foi feito em {created_at}."
+        )
+
+        response = deepseek_client.chat.completions.create(
+            model="deepseek-v4-pro",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Trecho {i + 1} de {len(chunks)}:\n\n{chunk}"}
+            ],
+            stream=False,
+            reasoning_effort="medium"
+        )
+        summaries.append(response.choices[0].message.content)
+
+    combined = "\n\n---\n\n".join(
+        [f"### Trecho {i + 1}\n\n{s}" for i, s in enumerate(summaries)]
+    )
+
+    system_prompt = (
+        "Você é um assistente especialista em organizar ideias, roteiros e pensamentos. "
+        "Combine os resumos parciais abaixo em um único documento Markdown bem estruturado e coeso. "
+        "Inclua: título criativo, data/hora, resumo executivo, temas principais, ideias organizadas, "
+        "conexões entre ideias, próximos passos sugeridos e notas importantes. "
+        "Elimine repetições e organize por tema. Use linguagem clara e objetiva em português. "
+        f"O registro foi feito em {created_at}. Use esta data/hora exata no documento."
+    )
+
+    response = deepseek_client.chat.completions.create(
+        model="deepseek-v4-pro",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Resumos parciais:\n\n{combined}\n\nTranscrição completa para referência:\n\n{transcription[:4000]}"}
+        ],
+        stream=False,
+        reasoning_effort="high",
+        extra_body={"thinking": {"type": "enabled"}}
+    )
+
+    return response.choices[0].message.content
+
+
+def _generate_ideas_title(transcription: str, label: str) -> str:
+    """Gera um título curto e descritivo para um organizador de ideias usando DeepSeek."""
+    if not deepseek_client:
+        return f"Ideias {label}"
+
+    try:
+        response = deepseek_client.chat.completions.create(
+            model="deepseek-v4-pro",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Você é um assistente que cria títulos curtos e claros para notas de ideias e roteiros. "
+                        "Com base na transcrição, gere um título de no máximo 60 caracteres que resuma o tema principal. "
+                        "Não use aspas, markdown ou data. Apenas o título em português."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Crie um título para esta nota de ideias:\n\n{transcription[:2000]}"
+                }
+            ],
+            stream=False,
+            reasoning_effort="low"
+        )
+        title = response.choices[0].message.content.strip().strip('"').strip("'")
+        if len(title) > 80:
+            title = title[:77] + "..."
+        return f"{title} — {label}"
+    except Exception as e:
+        print(f"Erro ao gerar título: {e}")
+        return f"Ideias {label}"
 
 
 def _generate_meeting_title(transcription: str, meeting_label: str) -> str:
@@ -721,17 +871,87 @@ def _process_meeting(file_path: str, filename: str, api_key: Optional[str] = Non
             print(f"Erro ao remover arquivo temporário: {e}")
 
 
+def _process_ideas(file_path: str, filename: str, api_key: Optional[str] = None, chat_id: Optional[str] = None):
+    """Processa um registro de ideias em background: transcreve, organiza, cria no Notion e envia status no Telegram."""
+    chat_id = chat_id or TELEGRAM_CHAT_ID
+    started_at = datetime.now(BRASILIA_TZ)
+    ideas_label = started_at.strftime("%d/%m/%Y às %H:%M")
+
+    def send_status(text: str):
+        if chat_id:
+            _telegram_send_message(chat_id, text)
+
+    try:
+        # 1. Início
+        send_status(f"💡 *RECORD-AI — Organizador de Ideias*\n\nRegistro de *{ideas_label}* iniciado.\n🔄 Transcrevendo o áudio...")
+        transcription, segments, detected_language = _transcribe_audio(file_path)
+
+        if not transcription.strip():
+            send_status(f"❌ *RECORD-AI*\n\nRegistro de *{ideas_label}*:\nnão foi possível transcrever o áudio.")
+            return
+
+        # 2. Organizando com DeepSeek
+        coverage_minutes = (segments[-1].end if segments else 0) / 60
+        send_status(f"💡 *RECORD-AI — Organizador de Ideias*\n\nRegistro de *{ideas_label}*:\n🧠 Organizando ideias ({coverage_minutes:.0f} min transcritos)...")
+        organized = _organize_ideas_with_deepseek(transcription, segments, ideas_label)
+
+        # 3. Criando no Notion
+        notion_url = None
+        if NOTION_API_KEY:
+            send_status(f"💡 *RECORD-AI — Organizador de Ideias*\n\nRegistro de *{ideas_label}*:\n📄 Criando página no Notion...")
+            try:
+                title = _generate_ideas_title(transcription, ideas_label)
+                notion_page = _create_notion_page(organized, title)
+                notion_url = notion_page.get("url")
+            except Exception as e:
+                print(f"Erro ao criar página no Notion: {e}")
+                send_status(f"⚠️ *RECORD-AI*\n\nRegistro de *{ideas_label}*:\nErro ao criar no Notion: {str(e)}")
+
+        # 4. Status final no Telegram
+        if notion_url:
+            send_status(
+                f"✅ *RECORD-AI — Organizador de Ideias*\n\nRegistro de *{ideas_label}* finalizado.\n"
+                f"📄 *[Ver nota no Notion]({notion_url})*"
+            )
+        else:
+            send_status(f"✅ *RECORD-AI — Organizador de Ideias*\n\nRegistro de *{ideas_label}* finalizado.")
+
+    except Exception as e:
+        error_detail = traceback.format_exc()
+        print(error_detail)
+        send_status(
+            f"❌ *RECORD-AI — Organizador de Ideias*\n\nRegistro de *{ideas_label}*:\n"
+            f"Erro ao processar:\n```{str(e)[:500]}```"
+        )
+    finally:
+        try:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception as e:
+            print(f"Erro ao remover arquivo temporário: {e}")
+
+
+def _process_audio(mode: str, file_path: str, filename: str, api_key: Optional[str] = None, chat_id: Optional[str] = None):
+    """Despacha o processamento para o modo selecionado."""
+    if mode == MODE_IDEAS:
+        _process_ideas(file_path, filename, api_key, chat_id)
+    else:
+        _process_meeting(file_path, filename, api_key, chat_id)
+
+
 @app.post("/upload-and-transcribe")
 async def upload_and_transcribe(
     file: UploadFile = File(...),
     x_api_key: Optional[str] = Header(None),
-    x_hash_id: Optional[str] = Header(None)
+    x_hash_id: Optional[str] = Header(None),
+    x_mode: Optional[str] = Header(None)
 ):
     """
     Recebe áudio da extensão, confirma o recebimento e processa em background:
     transcreve com Whisper, organiza com DeepSeek e cria a ata no Notion.
     O Telegram recebe apenas status de progresso e erro.
     Header opcional X-Hash-Id escolhe qual conversa configurada recebe os status.
+    Header opcional X-Mode escolhe o modo: 'meeting' (reunião) ou 'ideas' (organizador de ideias).
     """
     verify_api_key(x_api_key)
 
@@ -739,6 +959,7 @@ async def upload_and_transcribe(
         raise HTTPException(status_code=500, detail="Bot não configurado no servidor")
 
     target_chat_id = _resolve_chat_id(x_hash_id)
+    mode = _resolve_mode(x_mode, target_chat_id)
 
     if not whisper_model:
         raise HTTPException(status_code=503, detail="Transcrição não habilitada. Set ENABLE_TRANSCRIPTION=true")
@@ -754,16 +975,16 @@ async def upload_and_transcribe(
 
     # Notifica recebimento
     now = datetime.now(BRASILIA_TZ).strftime("%d/%m/%Y às %H:%M")
-    _telegram_send_message(target_chat_id, f"🎙️ *RECORD-AI*\n\n📥 Áudio de *{now}* recebido. Iniciando processamento...")
+    mode_label = "Organizador de Ideias" if mode == MODE_IDEAS else "Reunião"
+    _telegram_send_message(target_chat_id, f"🎙️ *RECORD-AI*\n\n📥 Áudio de *{now}* recebido ({mode_label}). Iniciando processamento...")
 
     # Processa em background (sem await, para responder rápido à extensão)
-    import threading
-    thread = threading.Thread(target=_process_meeting, args=(tmp_path, file.filename, x_api_key, target_chat_id))
+    thread = threading.Thread(target=_process_audio, args=(mode, tmp_path, file.filename, x_api_key, target_chat_id))
     thread.start()
 
     return {
         "ok": True,
-        "message": "Áudio recebido. Acompanhe o processamento no Telegram."
+        "message": f"Áudio recebido no modo {mode}. Acompanhe o processamento no Telegram."
     }
 
 
@@ -841,7 +1062,8 @@ async def telegram_webhook(
 ):
     """
     Webhook chamado pelo Telegram quando o bot recebe uma mensagem.
-    Se a mensagem contiver áudio, inicia o fluxo completo de organização de reunião.
+    Se a mensagem contiver áudio, inicia o fluxo completo de organização.
+    Textos '1' ou '2' alternam o modo da conversa (reunião ou organizador de ideias).
     """
     if TELEGRAM_WEBHOOK_SECRET and x_telegram_bot_api_secret_token != TELEGRAM_WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -860,8 +1082,33 @@ async def telegram_webhook(
     if not chat_id:
         return {"ok": True}
 
-    # Aceita áudio de qualquer conversa configurada no env
+    # Aceita mensagens de qualquer conversa configurada no env
     if str(chat_id) not in TELEGRAM_CHAT_IDS:
+        return {"ok": True}
+
+    text = (message.get("text") or "").strip().lower()
+
+    # Comandos de modo
+    if text == "/start":
+        _telegram_send_message(
+            chat_id,
+            "🎙️ *RECORD-AI*\n\n"
+            "Envie um áudio para transcrever e organizar.\n\n"
+            "Escolha o modo antes de enviar:\n"
+            "1️⃣ *Reunião* — ata de reunião\n"
+            "2️⃣ *Organizador de Ideias* — organize roteiros e ideias (eu comigo mesmo)\n\n"
+            "Modo atual: *" + ("Organizador de Ideias" if _get_chat_mode(chat_id) == MODE_IDEAS else "Reunião") + "*"
+        )
+        return {"ok": True}
+
+    if text in ("1", "reunião", "reuniao"):
+        _set_chat_mode(chat_id, MODE_MEETING)
+        _telegram_send_message(chat_id, "✅ Modo definido: *Reunião*. Envie o áudio quando estiver pronto.")
+        return {"ok": True}
+
+    if text in ("2", "ideias", "organizador de ideias", "organizador"):
+        _set_chat_mode(chat_id, MODE_IDEAS)
+        _telegram_send_message(chat_id, "✅ Modo definido: *Organizador de Ideias*. Envie o áudio quando estiver pronto.")
         return {"ok": True}
 
     audio = message.get("voice") or message.get("audio")
@@ -881,21 +1128,21 @@ async def telegram_webhook(
             chat_id,
             f"⚠️ *RECORD-AI*\n\nEste áudio tem *{size_mb:.0f} MB*, acima do limite de *{limit_mb:.0f} MB* "
             "que o Telegram permite bots baixarem.\n\n"
-            "Para reuniões longas, grave e envie pela *extensão Chrome* — ela não tem esse limite."
+            "Para áudios longos, grave e envie pela *extensão Chrome* — ela não tem esse limite."
         )
         return {"ok": True, "message": "Arquivo acima do limite de download do Telegram"}
 
     file_id = audio["file_id"]
+    mode = _get_chat_mode(chat_id)
 
     try:
         tmp_path = _telegram_download_file(file_id)
 
-        # Inicia o fluxo completo de reunião em background
-        import threading
-        thread = threading.Thread(target=_process_meeting, args=(tmp_path, "telegram_audio.ogg", None, str(chat_id)))
+        # Inicia o fluxo completo em background no modo da conversa
+        thread = threading.Thread(target=_process_audio, args=(mode, tmp_path, "telegram_audio.ogg", None, str(chat_id)))
         thread.start()
 
-        return {"ok": True, "message": "Áudio recebido. Processamento da reunião iniciado."}
+        return {"ok": True, "message": f"Áudio recebido. Processamento no modo {mode} iniciado."}
 
     except Exception as e:
         error_detail = traceback.format_exc()

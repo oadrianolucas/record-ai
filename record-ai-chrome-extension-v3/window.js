@@ -19,14 +19,24 @@ const states = {
 const timerEl = document.getElementById('timer');
 const progressEl = document.getElementById('progress');
 const errorMsg = document.getElementById('error-msg');
+const modeBadge = document.getElementById('mode-badge');
 
 let config = {};
+const MODE_LABELS = {
+  meeting: '1️⃣ Reunião',
+  ideas: '2️⃣ Organizador de Ideias'
+};
 
 const urlParams = new URLSearchParams(window.location.search);
 const tabStreamId = urlParams.get('streamId');
 
-chrome.storage.local.get(['apiUrl', 'apiKey', 'hashId'], (data) => {
+chrome.storage.local.get(['apiUrl', 'apiKey', 'hashId', 'mode'], (data) => {
   config = data;
+  config.mode = data.mode || 'meeting';
+  if (modeBadge) {
+    modeBadge.textContent = MODE_LABELS[config.mode] || MODE_LABELS.meeting;
+    modeBadge.classList.toggle('ideas', config.mode === 'ideas');
+  }
   if (!config.apiUrl) {
     showError('URL da API não configurada. Configure no popup da extensão.');
   }
@@ -180,6 +190,7 @@ async function sendToApi(audioBlob) {
   if (config.hashId) {
     headers['X-Hash-Id'] = config.hashId;
   }
+  headers['X-Mode'] = config.mode || 'meeting';
 
   try {
     const response = await fetch(`${config.apiUrl}/upload-and-transcribe`, {

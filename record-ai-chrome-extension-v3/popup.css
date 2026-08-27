@@ -63,6 +63,37 @@ body {
   gap: 6px;
 }
 
+/* Mode switch */
+.mode-switch {
+  display: flex;
+  width: 100%;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.mode-option {
+  flex: 1;
+  padding: 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  color: #888;
+  transition: all 0.2s;
+}
+
+.mode-option.active {
+  background: #ff4444;
+  color: #fff;
+}
+
+.mode-option.active[data-mode="ideas"] {
+  background: #f59e0b;
+  color: #000;
+}
+
 .hidden {
   display: none !important;
 }

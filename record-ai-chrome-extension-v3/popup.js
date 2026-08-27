@@ -16,9 +16,10 @@ const statusDetail = document.getElementById('status-detail');
 const configMsg = document.getElementById('config-msg');
 
 let config = {};
+const MODE_DEFAULT = 'meeting';
 
 // Carrega config
-chrome.storage.local.get(['apiUrl', 'apiKey', 'hashId'], (data) => {
+chrome.storage.local.get(['apiUrl', 'apiKey', 'hashId', 'mode'], (data) => {
   config = data;
   if (data.apiUrl) {
     document.getElementById('api-url').value = data.apiUrl;
@@ -29,6 +30,24 @@ chrome.storage.local.get(['apiUrl', 'apiKey', 'hashId'], (data) => {
   if (data.hashId) {
     document.getElementById('hash-id').value = data.hashId;
   }
+  updateModeUI(data.mode || MODE_DEFAULT);
+});
+
+// Mode switch
+function updateModeUI(mode) {
+  document.querySelectorAll('.mode-option').forEach(el => {
+    el.classList.toggle('active', el.dataset.mode === mode);
+  });
+}
+
+document.getElementById('mode-switch').addEventListener('click', (e) => {
+  const option = e.target.closest('.mode-option');
+  if (!option) return;
+  const mode = option.dataset.mode;
+  chrome.storage.local.set({ mode }, () => {
+    config.mode = mode;
+    updateModeUI(mode);
+  });
 });
 
 // Navegação
