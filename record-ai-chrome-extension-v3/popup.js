@@ -96,7 +96,7 @@ function openRecorderWindow(streamId) {
     url: url,
     type: 'popup',
     width: 340,
-    height: 260,
+    height: 300,
     focused: true
   });
   window.close();

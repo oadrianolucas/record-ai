@@ -25,12 +25,17 @@ Extensão Chrome que grava áudio e envia para **sua API** — o token do bot fi
 
 ## 🚀 Como usar
 
-1. Clique no ícone → **"🔴 Abrir Gravador"**
-2. Na aba do gravador, clique em **"🎙️ Permitir Microfone"**
-3. Clique em **"🔴 Iniciar Gravação"**
-4. Fale — visualizador de ondas ativo
-5. Clique em **"⏹️ Parar Gravação"**
-6. Áudio vai para **sua API** → API envia pro Telegram → Bot transcreve
+**Gravando ao vivo:**
+1. Clique no ícone → **"🎙️ Abrir Gravador"**
+2. Escolha **"🎤 Microfone"** ou **"🖥️ Reunião"** (áudio da aba)
+3. Fale/compartilhe — o timer mostra a gravação em andamento
+4. Clique em **⏸** para parar
+5. Áudio vai para **sua API** → API envia pro Telegram → Bot transcreve
+
+**Enviando um arquivo de áudio já gravado:**
+1. Clique no ícone → **"🎙️ Abrir Gravador"**
+2. Clique em **"📁 Enviar áudio"** e selecione o arquivo (MP3, WAV, M4A, OGG, OPUS, FLAC, AAC, WEBM)
+3. O upload segue o mesmo fluxo: API → Telegram → transcrição
 
 ## 🔒 Segurança
 

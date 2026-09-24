@@ -127,6 +127,18 @@ body {
   transform: translateY(-1px);
 }
 
+.btn-upload {
+  background: #1a1a1a;
+  color: #e0e0e0;
+  border: 1px solid #333;
+}
+
+.btn-upload:hover {
+  background: #222;
+  border-color: #444;
+  transform: translateY(-1px);
+}
+
 .btn-stop {
   background: #222;
   color: #fff;

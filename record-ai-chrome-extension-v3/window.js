@@ -57,13 +57,28 @@ function resizeWindow(width, height) {
   }
 }
 
+const fileInput = document.getElementById('file-input');
+
 document.getElementById('btn-mic').addEventListener('click', startMicRecording);
 document.getElementById('btn-tab').addEventListener('click', startTabRecording);
+document.getElementById('btn-upload').addEventListener('click', () => {
+  if (!config.apiUrl) {
+    showError('URL da API não configurada.');
+    return;
+  }
+  fileInput.click();
+});
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  fileInput.value = '';
+  if (!file) return;
+  sendToApi(file, file.name);
+});
 document.getElementById('btn-pause').addEventListener('click', stopRecording);
 document.getElementById('btn-close').addEventListener('click', () => window.close());
 document.getElementById('btn-retry').addEventListener('click', () => {
   showState('source');
-  resizeWindow(340, 260);
+  resizeWindow(340, 300);
 });
 
 async function startMicRecording() {
@@ -113,7 +128,7 @@ async function startTabRecording() {
     if (err.name === 'NotAllowedError') {
       // Usuário cancelou o seletor — volta para a escolha de fonte
       showState('source');
-      resizeWindow(340, 260);
+      resizeWindow(340, 300);
       return;
     }
     showError(err.message || 'Erro ao capturar áudio');
@@ -175,13 +190,13 @@ function showError(msg) {
   resizeWindow(340, 240);
 }
 
-async function sendToApi(audioBlob) {
+async function sendToApi(audioBlob, filename) {
   showState('sending');
   resizeWindow(340, 220);
   progressEl.style.width = '30%';
 
   const formData = new FormData();
-  formData.append('file', audioBlob, `record-ai_${Date.now()}.ogg`);
+  formData.append('file', audioBlob, filename || `record-ai_${Date.now()}.ogg`);
 
   const headers = {};
   if (config.apiKey) {
